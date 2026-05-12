@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include <sstream>
 #include <iomanip>
+#include <ctime>
 
 DoctorScreen::DoctorScreen(sf::Font& f, Doctor* d, Storage<Patient>* pats,
     Storage<Appointment>* appts, Storage<Prescription>* prescs, Storage<Bill>* b)
@@ -44,18 +45,57 @@ void DoctorScreen::buildLayout() {
     lInput1.setFont(font); lInput1.setCharacterSize(Theme::FS_SMALL); lInput1.setFillColor(Theme::TEXT_GRAY);
     lInput2.setFont(font); lInput2.setCharacterSize(Theme::FS_SMALL); lInput2.setFillColor(Theme::TEXT_GRAY);
     lInput3.setFont(font); lInput3.setCharacterSize(Theme::FS_SMALL); lInput3.setFillColor(Theme::TEXT_GRAY);
+
     tbInput1 = TextBox(font, "", { 240.f,480.f }, { 350.f,Theme::INPUT_H });
     tbInput2 = TextBox(font, "", { 240.f,580.f }, { 600.f,Theme::INPUT_H });
     tbInput3 = TextBox(font, "", { 240.f,640.f }, { 600.f,Theme::INPUT_H });
+
     btnConfirm = Button(font, "Confirm", { 240.f,640.f }, { 180.f,Theme::BTN_H }, Button::Style::PRIMARY);
     btnBack2 = Button(font, "Cancel", { 440.f,640.f }, { 180.f,Theme::BTN_H }, Button::Style::GHOST);
 }
 
-void DoctorScreen::setupToday() {
-    viewTitle.setString("Today's Appointments");
-    listRows.clear(); scrollOffset = 0; message.clear();
+
+void DoctorScreen::autoMarkMissed() {
+    time_t t = time(nullptr);
+    tm now{};
+    localtime_s(&now, &t);
+    int todayInt = (now.tm_year + 1900) * 10000 + (now.tm_mon + 1) * 100 + now.tm_mday;
+    int curHour = now.tm_hour;
     std::string today = getTodayDate();
 
+    bool changed = false;
+    for (int i = 0; i < appointments->size(); ++i) {
+        const Appointment& a = appointments->getAt(i);
+        if (a.getStatus() != "pending") continue;
+
+        int apptInt = dateToInt(a.getDate());
+        bool missed = false;
+
+        if (apptInt < todayInt) {
+            missed = true;
+        }
+        else if (a.getDate() == today) {
+            int slotHour = std::stoi(a.getTimeSlot().substr(0, 2));
+            if (slotHour < curHour) missed = true;
+        }
+
+        if (missed) {
+            Appointment* ap = appointments->findById(a.getAppointmentId());
+            if (ap) { ap->setStatus("missed"); changed = true; }
+        }
+    }
+    if (changed) FileHandler::saveAllAppointments(*appointments);
+}
+
+void DoctorScreen::setupToday() {
+    autoMarkMissed();
+
+    viewTitle.setString("Today's Appointments");
+    listRows.clear(); scrollOffset = 0; message.clear();
+
+    colPositions = { 238.f, 280.f, 490.f, 570.f };
+
+    std::string today = getTodayDate();
     int idx[200]; int n = 0;
     for (int i = 0; i < appointments->size(); ++i) {
         const Appointment& a = appointments->getAt(i);
@@ -70,29 +110,26 @@ void DoctorScreen::setupToday() {
         }
         idx[j + 1] = key;
     }
-    std::ostringstream hdr;
-    hdr << std::left << std::setw(6) << "ID"
-        << std::setw(21) << "Patient"
-        << std::setw(7) << "Slot"
-        << "Status";
-    listRows.push_back(hdr.str());
+    listRows.push_back("ID|Patient|Slot|Status");
     listRows.push_back(std::string(50, '-'));
 
     for (int i = 0; i < n; ++i) {
         const Appointment& a = appointments->getAt(idx[i]);
         Patient* p = patients->findById(a.getPatientId());
-        std::ostringstream ss;
-        ss << std::left << std::setw(6) << a.getAppointmentId()
-            << std::setw(21) << (p ? p->getName() : "Unknown")
-            << std::setw(7) << a.getTimeSlot() << a.getStatus();
-        listRows.push_back(ss.str());
+        std::string row =
+            std::to_string(a.getAppointmentId()) + "|" +
+            (p ? p->getName() : "Unknown") + "|" +
+            a.getTimeSlot() + "|" +
+            a.getStatus();
+        listRows.push_back(row);
     }
     if (n == 0) listRows.push_back("No appointments scheduled for today.");
 }
+
 void DoctorScreen::setupMarkAction(const std::string& action) {
     viewTitle.setString(action);
-    setupToday();  // reuse today's list
-    viewTitle.setString(action);  // restore after setupToday overwrites it
+    setupToday();           
+    viewTitle.setString(action); 
     lInput1.setString("Appointment ID");
     lInput1.setPosition(240.f, 460.f);
     tbInput1 = TextBox(font, "Enter Appointment ID", { 240.f,482.f }, { 300.f,Theme::INPUT_H });
@@ -102,26 +139,32 @@ void DoctorScreen::setupMarkAction(const std::string& action) {
 
 void DoctorScreen::setupPrescription() {
     viewTitle.setString("Write Prescription");
-    listRows.clear(); message.clear(); scrollOffset = 0;
+    listRows.clear(); colPositions.clear(); message.clear(); scrollOffset = 0;
+
     lInput1.setString("Appointment ID (must be 'completed')");
     lInput1.setPosition(240.f, 80.f);
     tbInput1 = TextBox(font, "Appointment ID", { 240.f,102.f }, { 300.f,Theme::INPUT_H });
+
     lInput2.setString("Medicines (e.g. Paracetamol 500mg;Ibuprofen 400mg)");
     lInput2.setPosition(240.f, 162.f);
     tbInput2 = TextBox(font, "Medicine;Dosage", { 240.f,184.f }, { 700.f,Theme::INPUT_H });
+
     lInput3.setString("Notes");
     lInput3.setPosition(240.f, 244.f);
     tbInput3 = TextBox(font, "Doctor notes", { 240.f,266.f }, { 700.f,Theme::INPUT_H });
+
     btnConfirm.setText("Save Prescription", font); btnConfirm.setPosition({ 240.f,326.f });
     btnBack2.setPosition({ 450.f,326.f });
 }
 
 void DoctorScreen::setupHistory() {
     viewTitle.setString("Patient Medical History");
-    listRows.clear(); message.clear();
+    listRows.clear(); colPositions.clear(); message.clear();
+
     lInput1.setString("Patient ID");
     lInput1.setPosition(240.f, 80.f);
     tbInput1 = TextBox(font, "Enter Patient ID", { 240.f,102.f }, { 300.f,Theme::INPUT_H });
+
     btnConfirm.setText("View History", font); btnConfirm.setPosition({ 240.f,162.f });
     btnBack2.setPosition({ 450.f,162.f });
 }
@@ -151,7 +194,9 @@ void DoctorScreen::doMarkNoShow() {
     }
     a->setStatus("noshow"); FileHandler::saveAllAppointments(*appointments);
     for (int i = 0; i < bills->size(); ++i)
-        if (bills->getAt(i).getAppointmentId() == id) { bills->getAt(i).setStatus("cancelled"); FileHandler::saveAllBills(*bills); break; }
+        if (bills->getAt(i).getAppointmentId() == id) {
+            bills->getAt(i).setStatus("cancelled"); FileHandler::saveAllBills(*bills); break;
+        }
     message = "Appointment marked as no-show."; msgSuccess = true;
     tbInput1.clear();
 }
@@ -174,7 +219,8 @@ void DoctorScreen::doWritePrescription() {
     if (notes.size() > 299) notes = notes.substr(0, 299);
     int newId = 1;
     for (int i = 0; i < prescriptions->size(); ++i)
-        if (prescriptions->getAt(i).getPrescriptionId() >= newId) newId = prescriptions->getAt(i).getPrescriptionId() + 1;
+        if (prescriptions->getAt(i).getPrescriptionId() >= newId)
+            newId = prescriptions->getAt(i).getPrescriptionId() + 1;
     Prescription presc(newId, id, a->getPatientId(), doctor->getId(), a->getDate(), med, notes);
     prescriptions->add(presc); FileHandler::appendPrescription(presc);
     message = "Prescription saved."; msgSuccess = true;
@@ -190,10 +236,14 @@ void DoctorScreen::doViewHistory() {
     bool ok = false;
     for (int i = 0; i < appointments->size(); ++i) {
         const Appointment& a = appointments->getAt(i);
-        if (a.getPatientId() == patId && a.getDoctorId() == doctor->getId() && a.getStatus() == "completed") { ok = true; break; }
+        if (a.getPatientId() == patId && a.getDoctorId() == doctor->getId() &&
+            a.getStatus() == "completed") {
+            ok = true; break;
+        }
     }
     if (!ok) { message = "Access denied. No completed appointments."; msgSuccess = false; return; }
-    listRows.clear();
+
+    listRows.clear(); colPositions.clear();
     int idx[200]; int n = 0;
     for (int i = 0; i < prescriptions->size(); ++i) {
         const Prescription& p = prescriptions->getAt(i);
@@ -201,7 +251,11 @@ void DoctorScreen::doViewHistory() {
     }
     for (int i = 1; i < n; ++i) {
         int key = idx[i], j = i - 1;
-        while (j >= 0 && dateToInt(prescriptions->getAt(idx[j]).getDate()) < dateToInt(prescriptions->getAt(key).getDate())) { idx[j + 1] = idx[j]; --j; }
+        while (j >= 0 && dateToInt(prescriptions->getAt(idx[j]).getDate()) <
+            dateToInt(prescriptions->getAt(key).getDate()))
+        {
+            idx[j + 1] = idx[j]; --j;
+        }
         idx[j + 1] = key;
     }
     for (int i = 0; i < n; ++i) {
@@ -220,27 +274,59 @@ void DoctorScreen::drawList(sf::RenderWindow& win) {
     float x = 238.f, lineH = 22.f;
     float y = (currentView == View::HISTORY) ? 220.f : 80.f;
     int start = scrollOffset, maxLines = (int)((Theme::WIN_H - y - 40.f) / lineH);
-    sf::Text row; row.setFont(font); row.setCharacterSize(14);
-    row.setFillColor(Theme::TEXT_WHITE);
+
+    sf::Text cell;
+    cell.setFont(font);
+    cell.setCharacterSize(14);
+
     for (int i = start; i < (int)listRows.size() && i < start + maxLines; ++i) {
-        if (i > 1) { sf::RectangleShape bg({ (float)Theme::WIN_W - 240.f,lineH }); bg.setPosition(230.f, y - 2.f);
-        bg.setFillColor((i % 2 == 0) ? Theme::ROW_EVEN : Theme::ROW_ODD); win.draw(bg); }
-        row.setString(listRows[i]); row.setPosition(x, y); win.draw(row); y += lineH;
+        const std::string& line = listRows[i];
+
+        if (i > 1 && !line.empty() && line[0] != '-') {
+            sf::RectangleShape bg({ (float)Theme::WIN_W - 240.f, lineH });
+            bg.setPosition(230.f, y - 2.f);
+            bg.setFillColor((i % 2 == 0) ? Theme::ROW_EVEN : Theme::ROW_ODD);
+            win.draw(bg);
+        }
+
+        bool hasColumns = !colPositions.empty() && (line.find('|') != std::string::npos);
+
+        if (hasColumns) {
+            std::istringstream ss(line);
+            std::string token;
+            int col = 0;
+            while (std::getline(ss, token, '|') && col < (int)colPositions.size()) {
+                cell.setString(token);
+                cell.setPosition(colPositions[col], y);
+                cell.setFillColor(i < 2 ? Theme::ACCENT : Theme::TEXT_WHITE);
+                cell.setStyle(i < 2 ? sf::Text::Bold : sf::Text::Regular);
+                win.draw(cell);
+                ++col;
+            }
+        }
+        else {
+            cell.setStyle(sf::Text::Regular);
+            cell.setFillColor(i == 0 ? Theme::ACCENT : Theme::TEXT_WHITE);
+            cell.setString(line);
+            cell.setPosition(x, y);
+            win.draw(cell);
+        }
+
+        y += lineH;
     }
 }
 
 void DoctorScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
-    if (btnToday.handleEvent(e, win)) { currentView = View::TODAY;       setupToday();          return; }
-    if (btnComplete.handleEvent(e, win)) { currentView = View::MARK_COMPLETE; setupMarkAction("Mark Appointment Complete"); return; }
-    if (btnNoShow.handleEvent(e, win)) { currentView = View::MARK_NOSHOW;  setupMarkAction("Mark Appointment No-Show");  return; }
-    if (btnPrescription.handleEvent(e, win)) { currentView = View::PRESCRIPTION; setupPrescription();   return; }
-    if (btnHistory.handleEvent(e, win)) { currentView = View::HISTORY;      setupHistory();        return; }
-    if (btnLogout.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU; return; }
+    if (btnToday.handleEvent(e, win)) { currentView = View::TODAY;        setupToday();                                   return; }
+    if (btnComplete.handleEvent(e, win)) { currentView = View::MARK_COMPLETE; setupMarkAction("Mark Appointment Complete");  return; }
+    if (btnNoShow.handleEvent(e, win)) { currentView = View::MARK_NOSHOW;   setupMarkAction("Mark Appointment No-Show");   return; }
+    if (btnPrescription.handleEvent(e, win)) { currentView = View::PRESCRIPTION;  setupPrescription();                           return; }
+    if (btnHistory.handleEvent(e, win)) { currentView = View::HISTORY;       setupHistory();                                return; }
+    if (btnLogout.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU;                                                 return; }
 
     if (e.type == sf::Event::MouseWheelScrolled) {
         scrollOffset -= (int)e.mouseWheelScroll.delta * 2;
-        if (scrollOffset < 0)
-            scrollOffset = 0;
+        if (scrollOffset < 0) scrollOffset = 0;
     }
 
     tbInput1.handleEvent(e, win);
@@ -248,9 +334,9 @@ void DoctorScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
 
     if (btnConfirm.handleEvent(e, win)) {
         if (currentView == View::MARK_COMPLETE) doMarkComplete();
-        else if (currentView == View::MARK_NOSHOW) doMarkNoShow();
-        else if (currentView == View::PRESCRIPTION) doWritePrescription();
-        else if (currentView == View::HISTORY) doViewHistory();
+        else if (currentView == View::MARK_NOSHOW)   doMarkNoShow();
+        else if (currentView == View::PRESCRIPTION)  doWritePrescription();
+        else if (currentView == View::HISTORY)       doViewHistory();
     }
     if (btnBack2.handleEvent(e, win)) { currentView = View::MENU; message.clear(); setupToday(); }
 }
@@ -264,8 +350,10 @@ void DoctorScreen::update(float dt) {
 void DoctorScreen::draw(sf::RenderWindow& win) {
     win.draw(contentArea); win.draw(sidebar); win.draw(topBar);
     win.draw(headerText);
+
     btnToday.draw(win); btnComplete.draw(win); btnNoShow.draw(win);
     btnPrescription.draw(win); btnHistory.draw(win); btnLogout.draw(win);
+
     win.draw(viewTitle);
 
     if (!listRows.empty()) drawList(win);
@@ -278,5 +366,6 @@ void DoctorScreen::draw(sf::RenderWindow& win) {
         }
         btnConfirm.draw(win); btnBack2.draw(win);
     }
+
     win.draw(msgText);
 }
