@@ -14,7 +14,6 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
-
 class AdminScreen : public Screen {
 public:
     enum class View {
@@ -22,7 +21,6 @@ public:
         ALL_PATIENTS, ALL_DOCTORS, ALL_APPOINTMENTS,
         UNPAID_BILLS, DISCHARGE, SECURITY_LOG, DAILY_REPORT
     };
-
 private:
     sf::Font& font;
     Admin* admin;
@@ -31,30 +29,24 @@ private:
     Storage<Appointment>* appointments;
     Storage<Bill>* bills;
     Storage<Prescription>* prescriptions;
-
     View currentView = View::MENU;
-
     sf::RectangleShape sidebar, topBar, contentArea, listBg;
     sf::Text           headerText, viewTitle, msgText;
     std::string        message;
     bool               msgSuccess = false;
-
     // Sidebar buttons
     Button btnAddDoc, btnRemoveDoc, btnPatients, btnDoctors,
         btnAppointments, btnUnpaid, btnDischarge,
-        btnSecLog, btnReport, btnLogout;
-
+        btnSecLog, btnReport, btnRegisterPat, btnLogout;
     std::vector<std::string> listRows;
     std::vector<float> colPositions;
     int scrollOffset = 0;
 
-    // Form fields (Add Doctor uses multiple)
     sf::Text lName, lSpec, lContact, lPassword, lFee, lInput1;
     TextBox  tbName, tbSpec, tbContact, tbPassword, tbFee, tbInput1;
     Button   btnConfirm, btnBack2;
 
     void buildLayout();
-
     void setupAddDoctor();
     void setupRemoveDoctor();
     void setupAllPatients();
@@ -64,13 +56,10 @@ private:
     void setupDischarge();
     void setupSecurityLog();
     void setupDailyReport();
-
     void doAddDoctor();
     void doRemoveDoctor();
     void doDischarge();
-
     void drawList(sf::RenderWindow& win);
-
 public:
     AdminScreen(sf::Font& font, Admin* admin,
         Storage<Patient>* patients,
@@ -78,11 +67,8 @@ public:
         Storage<Appointment>* appointments,
         Storage<Bill>* bills,
         Storage<Prescription>* prescriptions);
-
     void handleEvent(const sf::Event& e, sf::RenderWindow& win) override;
     void update(float dt) override;
-    void draw(sf::RenderWindow& win)   override;
+    void draw(sf::RenderWindow& win) override;
 };
-
 #endif
-
