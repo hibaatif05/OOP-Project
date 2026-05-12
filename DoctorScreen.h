@@ -1,5 +1,6 @@
 #ifndef DOCTORSCREEN_H
 #define DOCTORSCREEN_H
+
 #include "Screen.h"
 #include "Button.h"
 #include "TextBox.h"
@@ -35,6 +36,7 @@ private:
     Button btnToday, btnComplete, btnNoShow, btnPrescription, btnHistory, btnLogout;
 
     std::vector<std::string> listRows;
+    std::vector<float>       colPositions;   
     int scrollOffset = 0;
 
     sf::Text lInput1, lInput2, lInput3;
@@ -47,10 +49,13 @@ private:
     void setupPrescription();
     void setupHistory();
 
+    void autoMarkMissed();  
+
     void doMarkComplete();
     void doMarkNoShow();
     void doWritePrescription();
     void doViewHistory();
+
     void drawList(sf::RenderWindow& win);
 
 public:
@@ -66,4 +71,3 @@ public:
 };
 
 #endif
-
