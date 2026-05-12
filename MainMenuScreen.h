@@ -11,19 +11,17 @@ private:
     sf::Text subtitle;
     sf::RectangleShape logo;
     sf::RectangleShape card;
+
     Button btnPatient;
     Button btnDoctor;
     Button btnAdmin;
-    Button btnRegister;
     Button btnExit;
 
 public:
     explicit MainMenuScreen(sf::Font& font);
-
     void handleEvent(const sf::Event& e, sf::RenderWindow& win) override;
     void update(float dt) override;
     void draw(sf::RenderWindow& win) override;
 };
 
 #endif
-
