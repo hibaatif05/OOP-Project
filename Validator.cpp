@@ -52,7 +52,17 @@ bool Validator::isValidDate(const string& s) {
         if (month < 1 || month > 12) {
             return false;
         }
-        if (year < getCurrentYear()) {
+        // Get today's full date and reject anything before it
+        time_t t = time(nullptr);
+        tm today{};
+        localtime_s(&today, &t);
+        int todayYear = today.tm_year + 1900;
+        int todayMonth = today.tm_mon + 1;
+        int todayDay = today.tm_mday;
+        // Compare as integers: YYYYMMDD
+        int inputInt = year * 10000 + month * 100 + day;
+        int todayInt = todayYear * 10000 + todayMonth * 100 + todayDay;
+        if (inputInt < todayInt) {
             return false;
         }
     }
