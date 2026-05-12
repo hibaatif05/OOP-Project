@@ -5,7 +5,6 @@
 #include "Utils.h"
 #include <sstream>
 #include <iomanip>
-
 AdminScreen::AdminScreen(sf::Font& f, Admin* a,
     Storage<Patient>* pats, Storage<Doctor>* docs,
     Storage<Appointment>* appts, Storage<Bill>* b,
@@ -17,7 +16,6 @@ AdminScreen::AdminScreen(sf::Font& f, Admin* a,
 }
 
 //Layout 
-
 void AdminScreen::buildLayout() {
     sidebar.setSize({ 230.f,(float)Theme::WIN_H });
     sidebar.setPosition(0.f, 0.f); sidebar.setFillColor(Theme::SIDEBAR_BG);
@@ -50,9 +48,9 @@ void AdminScreen::buildLayout() {
     btnDischarge = Button(font, "Discharge Patient", { bx, by + 6 * (bh + gap) }, { bw,bh }, Button::Style::GHOST);
     btnSecLog = Button(font, "Security Log", { bx, by + 7 * (bh + gap) }, { bw,bh }, Button::Style::GHOST);
     btnReport = Button(font, "Daily Report", { bx, by + 8 * (bh + gap) }, { bw,bh }, Button::Style::PRIMARY);
-    btnLogout = Button(font, "Logout", { bx, by + 9 * (bh + gap) }, { bw,bh }, Button::Style::DANGER);
+    btnRegisterPat = Button(font, "Register Patient", { bx, by + 9 * (bh + gap) }, { bw,bh }, Button::Style::SUCCESS);
+    btnLogout = Button(font, "Logout", { bx, by + 10 * (bh + gap) }, { bw,bh }, Button::Style::DANGER);
 
-    // Form labels
     auto mkLbl = [&](sf::Text& lbl, const std::string& s) {
         lbl.setFont(font); lbl.setString(s);
         lbl.setCharacterSize(Theme::FS_SMALL); lbl.setFillColor(Theme::TEXT_GRAY);
@@ -111,7 +109,6 @@ void AdminScreen::setupRemoveDoctor() {
 void AdminScreen::setupAllPatients() {
     viewTitle.setString("All Patients");
     listRows.clear(); scrollOffset = 0;
-    // Fixed pixel positions for each column
     colPositions = { 248.f, 292.f, 432.f, 467.f, 490.f, 590.f, 672.f };
 
     listRows.push_back("ID|Name|Age|G|Contact|Balance|Unpaid");
@@ -143,7 +140,6 @@ void AdminScreen::setupAllPatients() {
 void AdminScreen::setupAllDoctors() {
     viewTitle.setString("All Doctors");
     listRows.clear(); scrollOffset = 0;
-    // Fixed pixel positions for each column
     colPositions = { 248.f, 292.f, 432.f, 572.f, 672.f };
 
     listRows.push_back("ID|Name|Specialization|Contact|Fee");
@@ -167,7 +163,6 @@ void AdminScreen::setupAllDoctors() {
 void AdminScreen::setupAllAppointments() {
     viewTitle.setString("All Appointments");
     listRows.clear(); scrollOffset = 0;
-    // Fixed pixel positions for each column
     colPositions = { 248.f, 290.f, 410.f, 515.f, 610.f, 660.f };
 
     int n = appointments->size();
@@ -207,7 +202,6 @@ void AdminScreen::setupAllAppointments() {
 void AdminScreen::setupUnpaidBills() {
     viewTitle.setString("Unpaid Bills");
     listRows.clear(); scrollOffset = 0;
-    // Fixed pixel positions for each column
     colPositions = { 248.f, 310.f, 480.f, 600.f };
 
     std::string today = getTodayDate();
@@ -249,7 +243,7 @@ void AdminScreen::setupDischarge() {
 void AdminScreen::setupSecurityLog() {
     viewTitle.setString("Security Log");
     listRows.clear(); scrollOffset = 0;
-    colPositions.clear();   // free-form text, no column splitting
+    colPositions.clear();   
     std::ifstream f("security_log.txt");
     std::string line; bool any = false;
     while (std::getline(f, line)) { if (!line.empty()) { listRows.push_back(line); any = true; } }
@@ -293,11 +287,10 @@ void AdminScreen::setupDailyReport() {
     listRows.push_back(revLine.str());
     listRows.push_back("");
 
-    // --- Unpaid bills section ---
+    //Unpaid bills section
     listRows.push_back("Patients with outstanding unpaid bills:");
     listRows.push_back(std::string(50, '-'));
 
-    // Use colPositions {248, 430} for two-column pipe rows
     for (int i = 0; i < patients->size(); ++i) {
         const Patient& p = patients->getAt(i);
         float owed = 0.f;
@@ -315,11 +308,9 @@ void AdminScreen::setupDailyReport() {
 
     listRows.push_back("");
 
-    // --- Doctor-wise summary section ---
+    //Doctor-wise summary section
     listRows.push_back("Doctor-wise summary for today:");
     listRows.push_back(std::string(50, '-'));
-
-    // Header uses '|' rendered at colPositions pixel stops
     listRows.push_back("Name|Completed|Pending|No-show");
 
     for (int i = 0; i < doctors->size(); ++i) {
@@ -343,7 +334,7 @@ void AdminScreen::setupDailyReport() {
     }
 }
 
-// Actions 
+//Actions 
 
 void AdminScreen::doAddDoctor() {
     std::string name = tbName.getValue(),
@@ -422,7 +413,6 @@ void AdminScreen::doDischarge() {
 }
 
 // Draw list 
-
 void AdminScreen::drawList(sf::RenderWindow& win) {
     win.draw(listBg);
     float y = 78.f, lineH = 22.f;
@@ -434,7 +424,6 @@ void AdminScreen::drawList(sf::RenderWindow& win) {
     cell.setCharacterSize(14);
 
     for (int i = start; i < (int)listRows.size() && i < start + maxLines; ++i) {
-        // Alternating row background (skip header row 0 and separator row 1)
         if (i > 1) {
             sf::RectangleShape bg({ (float)Theme::WIN_W - 250.f, lineH });
             bg.setPosition(240.f, y - 2.f);
@@ -446,13 +435,11 @@ void AdminScreen::drawList(sf::RenderWindow& win) {
         bool hasColumns = !colPositions.empty() && (line.find('|') != std::string::npos);
 
         if (hasColumns) {
-            // Split by '|' and render each token at its fixed pixel column x-position
             std::istringstream ss(line);
             std::string token;
             int col = 0;
             while (std::getline(ss, token, '|') && col < (int)colPositions.size()) {
                 if (i == 0) {
-                    // Header row: accent colour + bold
                     cell.setFillColor(Theme::ACCENT);
                     cell.setStyle(sf::Text::Bold);
                 }
@@ -467,7 +454,6 @@ void AdminScreen::drawList(sf::RenderWindow& win) {
             }
         }
         else {
-            // Separator lines, free-form report text, or plain messages
             cell.setStyle(i == 0 ? sf::Text::Bold : sf::Text::Regular);
             cell.setFillColor(i == 0 ? Theme::ACCENT : Theme::TEXT_WHITE);
             cell.setString(line);
@@ -482,16 +468,17 @@ void AdminScreen::drawList(sf::RenderWindow& win) {
 // Event / Update / Draw 
 
 void AdminScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
-    if (btnAddDoc.handleEvent(e, win)) { currentView = View::ADD_DOCTOR;       setupAddDoctor();       return; }
-    if (btnRemoveDoc.handleEvent(e, win)) { currentView = View::REMOVE_DOCTOR;    setupRemoveDoctor();    return; }
-    if (btnPatients.handleEvent(e, win)) { currentView = View::ALL_PATIENTS;     setupAllPatients();     return; }
-    if (btnDoctors.handleEvent(e, win)) { currentView = View::ALL_DOCTORS;      setupAllDoctors();      return; }
+    if (btnAddDoc.handleEvent(e, win)) { currentView = View::ADD_DOCTOR; setupAddDoctor(); return; }
+    if (btnRemoveDoc.handleEvent(e, win)) { currentView = View::REMOVE_DOCTOR; setupRemoveDoctor(); return; }
+    if (btnPatients.handleEvent(e, win)) { currentView = View::ALL_PATIENTS; setupAllPatients(); return; }
+    if (btnDoctors.handleEvent(e, win)) { currentView = View::ALL_DOCTORS; setupAllDoctors(); return; }
     if (btnAppointments.handleEvent(e, win)) { currentView = View::ALL_APPOINTMENTS; setupAllAppointments(); return; }
-    if (btnUnpaid.handleEvent(e, win)) { currentView = View::UNPAID_BILLS;     setupUnpaidBills();     return; }
-    if (btnDischarge.handleEvent(e, win)) { currentView = View::DISCHARGE;        setupDischarge();       return; }
-    if (btnSecLog.handleEvent(e, win)) { currentView = View::SECURITY_LOG;     setupSecurityLog();     return; }
-    if (btnReport.handleEvent(e, win)) { currentView = View::DAILY_REPORT;     setupDailyReport();     return; }
-    if (btnLogout.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU;                            return; }
+    if (btnUnpaid.handleEvent(e, win)) { currentView = View::UNPAID_BILLS; setupUnpaidBills(); return; }
+    if (btnDischarge.handleEvent(e, win)) { currentView = View::DISCHARGE; setupDischarge(); return; }
+    if (btnSecLog.handleEvent(e, win)) { currentView = View::SECURITY_LOG; setupSecurityLog(); return; }
+    if (btnReport.handleEvent(e, win)) { currentView = View::DAILY_REPORT; setupDailyReport(); return; }
+    if (btnRegisterPat.handleEvent(e, win)) { nextScreen = ScreenID::REGISTER_PATIENT; return; }
+    if (btnLogout.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU; return; }
 
     if (e.type == sf::Event::MouseWheelScrolled) {
         scrollOffset -= (int)e.mouseWheelScroll.delta * 2;
@@ -528,10 +515,10 @@ void AdminScreen::draw(sf::RenderWindow& win) {
     win.draw(contentArea); win.draw(sidebar); win.draw(topBar);
     win.draw(headerText);
 
-    btnAddDoc.draw(win);     btnRemoveDoc.draw(win);  btnPatients.draw(win);
-    btnDoctors.draw(win);    btnAppointments.draw(win); btnUnpaid.draw(win);
-    btnDischarge.draw(win);  btnSecLog.draw(win);     btnReport.draw(win);
-    btnLogout.draw(win);
+    btnAddDoc.draw(win);      btnRemoveDoc.draw(win);    btnPatients.draw(win);
+    btnDoctors.draw(win);     btnAppointments.draw(win); btnUnpaid.draw(win);
+    btnDischarge.draw(win);   btnSecLog.draw(win);       btnReport.draw(win);
+    btnRegisterPat.draw(win); btnLogout.draw(win);
 
     win.draw(viewTitle);
 
