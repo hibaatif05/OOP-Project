@@ -2,7 +2,6 @@
 #include "Validator.h"
 #include "Theme.h"
 #include <stdexcept>
-
 RegisterScreen::RegisterScreen(sf::Font& f, Storage<Patient>& pats)
     : font(f), patients(pats) {
 
@@ -107,7 +106,7 @@ void RegisterScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
     tbBalance.handleEvent(e, win);
 
     if (btnRegister.handleEvent(e, win)) tryRegister();
-    if (btnBack.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU; message.clear(); }
+    if (btnBack.handleEvent(e, win)) { nextScreen = ScreenID::ADMIN_MENU; message.clear(); }
 }
 
 void RegisterScreen::update(float dt) {
