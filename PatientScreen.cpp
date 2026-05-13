@@ -5,6 +5,7 @@
 #include "Exceptions.h"
 #include <sstream>
 #include <iomanip>
+#include <ctime>
 
 static const std::string SLOTS[] = {
     "09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00"
@@ -20,7 +21,7 @@ PatientScreen::PatientScreen(sf::Font& f, Patient* p,
     buildSidebar();
     buildContentArea();
     refreshHeader();
-    setupViewAppts();  
+    setupViewAppts();
     currentView = View::MENU;
 }
 
@@ -60,13 +61,12 @@ void PatientScreen::buildContentArea() {
     viewTitle.setPosition(240.f, 20.f);
 
     msgText.setFont(font); msgText.setCharacterSize(Theme::FS_SMALL);
-    msgText.setPosition(240.f, 680.f);
+    msgText.setPosition(240.f, 630.f);
 
     listBg.setSize({ (float)Theme::WIN_W - 240.f, (float)Theme::WIN_H - 120.f });
     listBg.setPosition(230.f, 70.f);
     listBg.setFillColor(Theme::PANEL);
 
-    // Shared form widgets
     lInput1.setFont(font); lInput1.setCharacterSize(Theme::FS_SMALL);
     lInput1.setFillColor(Theme::TEXT_GRAY);
     lInput2.setFont(font); lInput2.setCharacterSize(Theme::FS_SMALL);
@@ -99,13 +99,48 @@ bool PatientScreen::isSlotTaken(int docId, const std::string& date, const std::s
     return false;
 }
 
-//View setup helpers 
+// Auto-mark any past pending appointments as "missed" and save to file.
+void PatientScreen::autoMarkMissed() {
+    time_t t = time(nullptr);
+    tm now{};
+    localtime_s(&now, &t);
+    int todayInt = (now.tm_year + 1900) * 10000 + (now.tm_mon + 1) * 100 + now.tm_mday;
+    int curHour = now.tm_hour;
+    std::string today = getTodayDate();
+
+    bool changed = false;
+    for (int i = 0; i < appointments->size(); ++i) {
+        const Appointment& a = appointments->getAt(i);
+        if (a.getStatus() != "pending") continue;
+
+        int apptInt = dateToInt(a.getDate());
+        bool missed = false;
+
+        if (apptInt < todayInt) {
+            missed = true;  
+        }
+        else if (a.getDate() == today) {
+            int slotHour = std::stoi(a.getTimeSlot().substr(0, 2));
+            if (slotHour < curHour) missed = true;  
+        }
+
+        if (missed) {
+            Appointment* ap = appointments->findById(a.getAppointmentId());
+            if (ap) { ap->setStatus("missed"); changed = true; }
+        }
+    }
+    if (changed) FileHandler::saveAllAppointments(*appointments);
+}
+
+//View setup helpers
 
 void PatientScreen::setupViewAppts() {
+    // Auto-update any past pending appointments to "missed" before displaying
+    autoMarkMissed();
+
     viewTitle.setString("My Appointments");
     listRows.clear(); scrollOffset = 0;
 
-    // Collect appointments belonging to this patient
     int idx[200]; int n = 0;
     for (int i = 0; i < appointments->size(); ++i)
         if (appointments->getAt(i).getPatientId() == patient->getId())
@@ -122,7 +157,6 @@ void PatientScreen::setupViewAppts() {
         idx[j + 1] = key;
     }
 
-    // Pipe-delimited header (matches COL_X positions in drawList)
     listRows.push_back("ID|Doctor|Specialization|Date|Slot|Status");
     listRows.push_back(std::string(82, '-'));
 
@@ -138,9 +172,9 @@ void PatientScreen::setupViewAppts() {
             a.getStatus();
         listRows.push_back(row);
     }
-
     if (n == 0) listRows.push_back("No appointments found.");
 }
+
 void PatientScreen::setupViewRecords() {
     viewTitle.setString("My Medical Records");
     listRows.clear(); scrollOffset = 0;
@@ -149,7 +183,6 @@ void PatientScreen::setupViewRecords() {
     for (int i = 0; i < prescriptions->size(); ++i)
         if (prescriptions->getAt(i).getPatientId() == patient->getId())
             idx[n++] = i;
-    // Sort descending
     for (int i = 1; i < n; ++i) {
         int key = idx[i], j = i - 1;
         while (j >= 0 && dateToInt(prescriptions->getAt(idx[j]).getDate()) <
@@ -170,12 +203,12 @@ void PatientScreen::setupViewRecords() {
     }
     if (n == 0) listRows.push_back("No medical records found.");
 }
+
 void PatientScreen::setupViewBills() {
     viewTitle.setString("My Bills");
     listRows.clear(); scrollOffset = 0;
     float total = 0.f;
 
-    // Pipe-delimited header
     listRows.push_back("BillID|ApptID|Amount (PKR)|Status|Date");
     listRows.push_back(std::string(60, '-'));
 
@@ -183,10 +216,8 @@ void PatientScreen::setupViewBills() {
     for (int i = 0; i < bills->size(); ++i) {
         const Bill& b = bills->getAt(i);
         if (b.getPatientId() != patient->getId()) continue;
-
         std::ostringstream amt;
         amt << std::fixed << std::setprecision(2) << b.getAmount();
-
         std::string row =
             std::to_string(b.getBillId()) + "|" +
             std::to_string(b.getAppointmentId()) + "|" +
@@ -194,18 +225,16 @@ void PatientScreen::setupViewBills() {
             b.getStatus() + "|" +
             b.getDate();
         listRows.push_back(row);
-
         if (b.getStatus() == "unpaid") total += b.getAmount();
         any = true;
     }
-
     if (!any) { listRows.push_back("No bills found."); return; }
-
     listRows.push_back("");
     std::ostringstream ts;
     ts << "Total unpaid: PKR " << std::fixed << std::setprecision(2) << total;
     listRows.push_back(ts.str());
 }
+
 void PatientScreen::setupBook() {
     viewTitle.setString("Book Appointment");
     bookStep = BookStep::SPEC_SEARCH;
@@ -251,6 +280,7 @@ void PatientScreen::setupCancel() {
     btnConfirm.setPosition({ 240.f, 580.f });
     btnBack2.setPosition({ 450.f, 580.f });
 }
+
 void PatientScreen::setupPayBill() {
     viewTitle.setString("Pay Bill");
     listRows.clear(); scrollOffset = 0;
@@ -293,7 +323,6 @@ void PatientScreen::setupTopUp() {
     btnBack2.setPosition({ 450.f, 162.f });
 }
 
-
 void PatientScreen::doBookStep1() {
     std::string spec = tbInput1.getValue();
     if (spec.empty()) { message = "Enter a specialization."; msgSuccess = false; return; }
@@ -318,7 +347,6 @@ void PatientScreen::doBookStep1() {
         msgSuccess = false; return;
     }
 
-    // Move to step 2: ask for Doctor ID and Date
     bookStep = BookStep::SLOT_SELECT;
     lInput1.setString("Doctor ID"); lInput1.setPosition(240.f, 320.f);
     tbInput1 = TextBox(font, "Enter Doctor ID", { 240.f, 342.f }, { 300.f, Theme::INPUT_H });
@@ -337,7 +365,35 @@ void PatientScreen::doBookStep2() {
     int docId = 0;
     try { docId = std::stoi(docIdStr); }
     catch (...) { message = "Invalid Doctor ID."; msgSuccess = false; return; }
-    if (!Validator::isValidDate(date)) { message = "Invalid date. Use DD-MM-YYYY."; msgSuccess = false; return; }
+
+    bool fmtOk = (date.size() == 10 && date[2] == '-' && date[5] == '-');
+    if (fmtOk) {
+        for (int pos : {0, 1, 3, 4, 6, 7, 8, 9})
+            if (date[pos] < '0' || date[pos] > '9') { fmtOk = false; break; }
+    }
+    if (!fmtOk) {
+        message = "Invalid format. Use DD-MM-YYYY (e.g. 25-12-2026).";
+        msgSuccess = false; return;
+    }
+
+    // Step 2: check day and month are in valid range
+    int day = 0, month = 0, year = 0;
+    try {
+        day = std::stoi(date.substr(0, 2));
+        month = std::stoi(date.substr(3, 2));
+        year = std::stoi(date.substr(6, 4));
+    }
+    catch (...) { message = "Invalid date values."; msgSuccess = false; return; }
+
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+        message = "Invalid day or month in date."; msgSuccess = false; return;
+    }
+
+    // Step 3: reject past dates with a clear, specific message
+    if (!Validator::isValidDate(date)) {
+        message = "That date has already passed. Please choose today or a future date.";
+        msgSuccess = false; return;
+    }
 
     // Check doctor is in found list
     bool valid = false;
@@ -347,10 +403,25 @@ void PatientScreen::doBookStep2() {
     selectedDoctorId = docId;
     bookDate = date;
 
-    // Build slot buttons
+    // Filter past time slots when the selected date is today
+    std::string today = getTodayDate();
+    bool isToday = (date == today);
+    int curHour = 0;
+    if (isToday) {
+        time_t t = time(nullptr);
+        tm now{};
+        localtime_s(&now, &t);
+        curHour = now.tm_hour;
+    }
+
     availableSlots.clear(); slotButtons.clear();
     float sx = 240.f, sy = 560.f;
     for (int i = 0; i < SLOT_COUNT; ++i) {
+        // Skip slots whose hour has already passed for today
+        if (isToday) {
+            int slotHour = std::stoi(SLOTS[i].substr(0, 2));
+            if (slotHour < curHour) continue;
+        }
         if (!isSlotTaken(docId, date, SLOTS[i])) {
             availableSlots.push_back(SLOTS[i]);
             Button b(font, SLOTS[i], { sx, sy }, { 90.f, 36.f }, Button::Style::GHOST);
@@ -359,11 +430,16 @@ void PatientScreen::doBookStep2() {
             if (sx > 1100.f) { sx = 240.f; sy += 46.f; }
         }
     }
-    if (availableSlots.empty()) { message = "No slots available on that date."; msgSuccess = false; return; }
+    if (availableSlots.empty()) {
+        if (isToday)
+            message = "All time slots for today have already passed. Please choose a future date.";
+        else
+            message = "No slots available on " + date + " — all slots are already booked.";
+        msgSuccess = false; return;
+    }
 
     bookStep = BookStep::DONE;
     message = "Select a time slot below:"; msgSuccess = true;
-    // Update list to show slots
     listRows.push_back("");
     listRows.push_back("Available slots on " + date + ":");
     for (auto& s : availableSlots) listRows.push_back("  " + s);
@@ -441,31 +517,27 @@ void PatientScreen::doConfirmTopUp() {
 //Event Handling
 
 void PatientScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
-    // Sidebar buttons
-    if (btnBook.handleEvent(e, win)) { currentView = View::BOOK;    setupBook();      return; }
-    if (btnCancel.handleEvent(e, win)) { currentView = View::CANCEL;  setupCancel();    return; }
-    if (btnViewAppts.handleEvent(e, win)) { currentView = View::VIEW_APPTS; setupViewAppts(); return; }
+    if (btnBook.handleEvent(e, win)) { currentView = View::BOOK;        setupBook();        return; }
+    if (btnCancel.handleEvent(e, win)) { currentView = View::CANCEL;       setupCancel();      return; }
+    if (btnViewAppts.handleEvent(e, win)) { currentView = View::VIEW_APPTS;   setupViewAppts();   return; }
     if (btnRecords.handleEvent(e, win)) { currentView = View::VIEW_RECORDS; setupViewRecords(); return; }
-    if (btnBills.handleEvent(e, win)) { currentView = View::VIEW_BILLS; setupViewBills(); return; }
-    if (btnPayBill.handleEvent(e, win)) { currentView = View::PAY_BILL; setupPayBill();  return; }
-    if (btnTopUp.handleEvent(e, win)) { currentView = View::TOPUP;   setupTopUp();     return; }
+    if (btnBills.handleEvent(e, win)) { currentView = View::VIEW_BILLS;   setupViewBills();   return; }
+    if (btnPayBill.handleEvent(e, win)) { currentView = View::PAY_BILL;     setupPayBill();     return; }
+    if (btnTopUp.handleEvent(e, win)) { currentView = View::TOPUP;        setupTopUp();       return; }
     if (btnLogout.handleEvent(e, win)) { nextScreen = ScreenID::MAIN_MENU; return; }
 
-    // Scroll list
     if (e.type == sf::Event::MouseWheelScrolled) {
         scrollOffset -= (int)e.mouseWheelScroll.delta * 2;
-        if (scrollOffset < 0)
-            scrollOffset = 0;
+        if (scrollOffset < 0) scrollOffset = 0;
     }
 
-    // Content-specific inputs
     if (currentView == View::BOOK) {
         if (bookStep != BookStep::DONE) {
             tbInput1.handleEvent(e, win); tbInput2.handleEvent(e, win);
         }
         if (btnConfirm.handleEvent(e, win)) doConfirmBook();
         if (btnBack2.handleEvent(e, win)) { currentView = View::MENU; message.clear(); }
-        // Slot selection buttons
+
         for (int i = 0; i < (int)slotButtons.size(); ++i) {
             if (slotButtons[i].handleEvent(e, win)) {
                 std::string slot = availableSlots[i];
@@ -495,7 +567,9 @@ void PatientScreen::handleEvent(const sf::Event& e, sf::RenderWindow& win) {
                     << " | PKR " << std::fixed << std::setprecision(2)
                     << d->getFee() << " deducted.";
                 message = ss.str(); msgSuccess = true;
-                refreshHeader(); slotButtons.clear(); bookStep = BookStep::SPEC_SEARCH;
+                refreshHeader();
+                currentView = View::VIEW_APPTS;
+                setupViewAppts();
                 return;
             }
         }
@@ -523,13 +597,13 @@ void PatientScreen::update(float dt) {
     msgText.setFillColor(msgSuccess ? Theme::SUCCESS : Theme::DANGER);
 }
 
-//Drawing 
+//Drawing
 
 void PatientScreen::drawList(sf::RenderWindow& win)
 {
     win.draw(listBg);
     float y = 78.f;
-    float lineH = 24.f;  // increased from 22.f to give breathing room
+    float lineH = 24.f;
     int start = scrollOffset;
     int maxLines = (int)((Theme::WIN_H - 120.f) / lineH);
 
@@ -543,10 +617,9 @@ void PatientScreen::drawList(sf::RenderWindow& win)
     {
         const std::string& row = listRows[i];
 
-        // Only draw alternating background for non-empty, non-separator rows
         if (i > 1 && !row.empty() && row[0] != '-')
         {
-            sf::RectangleShape bg({ (float)Theme::WIN_W - 240.f, lineH - 2.f }); // -2 prevents bleed
+            sf::RectangleShape bg({ (float)Theme::WIN_W - 240.f, lineH - 2.f });
             bg.setPosition(230.f, y);
             bg.setFillColor((i % 2 == 0) ? Theme::ROW_EVEN : Theme::ROW_ODD);
             win.draw(bg);
@@ -570,7 +643,6 @@ void PatientScreen::drawList(sf::RenderWindow& win)
         {
             cell.setString(row);
             cell.setPosition(238.f, y);
-            // Highlight the date/doctor header line in each record
             cell.setFillColor(row.substr(0, 5) == "Date:" ? Theme::ACCENT : Theme::TEXT_WHITE);
             win.draw(cell);
         }
@@ -578,6 +650,7 @@ void PatientScreen::drawList(sf::RenderWindow& win)
         y += lineH;
     }
 }
+
 void PatientScreen::draw(sf::RenderWindow& win) {
     win.draw(contentArea);
     win.draw(sidebar);
@@ -603,7 +676,6 @@ void PatientScreen::draw(sf::RenderWindow& win) {
             drawList(win);
             for (auto& sb : slotButtons) sb.draw(win);
         }
-
         if (!(currentView == View::BOOK && bookStep == BookStep::DONE)) {
             win.draw(lInput1); tbInput1.draw(win);
             if (currentView == View::BOOK && bookStep == BookStep::SLOT_SELECT) {
@@ -616,5 +688,16 @@ void PatientScreen::draw(sf::RenderWindow& win) {
 
     if (currentView == View::TOPUP) { win.draw(lInput1); tbInput1.draw(win); }
 
+    if (currentView == View::BOOK) {
+        if (bookStep == BookStep::SLOT_SELECT)
+            msgText.setPosition(240.f, 540.f);   
+        else if (bookStep == BookStep::SPEC_SEARCH)
+            msgText.setPosition(240.f, 640.f);   
+        else
+            msgText.setPosition(240.f, 640.f);
+    }
+    else {
+        msgText.setPosition(240.f, 640.f);       
+    }
     win.draw(msgText);
 }
