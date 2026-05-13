@@ -1,5 +1,6 @@
 #ifndef PATIENTSCREEN_H
 #define PATIENTSCREEN_H
+
 #include "Screen.h"
 #include "Button.h"
 #include "TextBox.h"
@@ -32,18 +33,18 @@ private:
 
     View currentView = View::MENU;
 
-    //Layout 
+   
     sf::RectangleShape sidebar;
     sf::RectangleShape topBar;
     sf::RectangleShape contentArea;
     sf::Text           headerName;
     sf::Text           headerBalance;
 
-    // Sidebar buttons
+    
     Button btnBook, btnCancel, btnViewAppts, btnRecords,
         btnBills, btnPayBill, btnTopUp, btnLogout;
 
-    // Content area widgets (shared/reused per view)
+    
     sf::Text            viewTitle;
     sf::Text            msgText;
     std::string         message;
@@ -59,7 +60,7 @@ private:
     sf::Text lInput1, lInput2, lInput3;
     Button   btnConfirm, btnBack2;
 
-    // Slot selection state (book appointment)
+    // Slot selection state 
     int      selectedDoctorId = -1;
     std::string bookDate;
     std::vector<std::string> availableSlots;
@@ -70,7 +71,7 @@ private:
     void buildSidebar();
     void buildContentArea();
     void refreshHeader();
-
+    void autoMarkMissed();  
     // View builders
     void setupBook();
     void setupCancel();
@@ -81,8 +82,8 @@ private:
     void setupTopUp();
 
     // Action handlers
-    void doBookStep1();    
-    void doBookStep2();    
+    void doBookStep1();
+    void doBookStep2();
     void doConfirmBook();
     void doConfirmCancel();
     void doConfirmPayBill();
@@ -110,4 +111,3 @@ public:
 };
 
 #endif
-
